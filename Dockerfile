@@ -1,32 +1,45 @@
-# STAGE 1: Build stage
-FROM composer:2 AS build
+# ===========================
+# 1) Build stage
+# ===========================
+FROM php:8.2-fpm AS build
 
-WORKDIR /app
-
-# Copy composer files
-COPY composer.json composer.lock ./
-
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
-
-# Copy the rest of the application
-COPY . .
-
-# STAGE 2: Runtime stage
-FROM php:8.2-fpm
-
-WORKDIR /app
-
-# Install required PHP extensions
+# System dependencies
 RUN apt-get update && apt-get install -y \
-    zip unzip git libpng-dev libonig-dev libxml2-dev libzip-dev \
+    unzip zip git libpng-dev libonig-dev libxml2-dev libzip-dev \
     && docker-php-ext-install pdo pdo_mysql mbstring gd zip bcmath
 
-# Copy built Laravel files
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+# Copy entire Laravel project
+COPY . .
+
+# Install dependencies (NO dev)
+RUN composer install --no-dev --optimize-autoloader
+
+# Generate optimized Laravel files
+RUN php artisan config:cache
+RUN php artisan route:cache
+RUN php artisan view:cache
+
+
+# ===========================
+# 2) Final stage
+# ===========================
+FROM php:8.2-fpm
+
+RUN apt-get update && apt-get install -y \
+    unzip zip git libpng-dev libonig-dev libxml2-dev libzip-dev \
+    && docker-php-ext-install pdo pdo_mysql mbstring gd zip bcmath
+
+WORKDIR /app
+
+# Copy build assets
 COPY --from=build /app /app
 
-# Expose port
-EXPOSE 8000
+EXPOSE 8080
 
-# Start Laravel server
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
+# Render requires listening on port 8080
+CMD php -S 0.0.0.0:8080 -t public
