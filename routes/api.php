@@ -6,6 +6,10 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\TableController;
 use App\Http\Controllers\GameController;
 
+Route::get('/ping', function () {
+    return response()->json(['status' => 'ok']);
+});
+
 Route::post('/signup', [AuthController::class, 'signup']);
 Route::post('/login', [AuthController::class, 'login']);
 
