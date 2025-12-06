@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Club;
 use Illuminate\Http\Request;
+use App\Models\Game;
 
 class CustomerController extends Controller
 {
@@ -33,12 +34,49 @@ class CustomerController extends Controller
     // Get all customers under a club
     public function getCustomers($club_id)
     {
-        // Get all customers of this club
         $customers = Customer::where('club_id', $club_id)->get();
 
-        // Calculate totals
         $totalPaid = $customers->sum('paid_amount');
         $totalPending = $customers->sum('pending_amount');
+
+        $today = now()->toDateString();
+
+        $todaysGames = Game::where('club_id', $club_id)
+            ->whereDate('start_time', $today)
+            ->get();
+
+        foreach ($customers as $customer) {
+            $winsToday = 0;
+            $lossesToday = 0;
+
+            foreach ($todaysGames as $game) {
+
+                // --- SAFE winners decode ---
+                $winners = $game->winners;
+                if (!is_array($winners)) {
+                    $winners = json_decode($winners, true);
+                    $winners = is_array($winners) ? $winners : ($winners ? [$winners] : []);
+                }
+
+                // --- SAFE losers decode ---
+                $losers = $game->losers;
+                if (!is_array($losers)) {
+                    $losers = json_decode($losers, true);
+                    $losers = is_array($losers) ? $losers : ($losers ? [$losers] : []);
+                }
+
+                if (in_array($customer->id, $winners)) {
+                    $winsToday++;
+                }
+
+                if (in_array($customer->id, $losers)) {
+                    $lossesToday++;
+                }
+            }
+
+            $customer->wins_today = $winsToday;
+            $customer->losses_today = $lossesToday;
+        }
 
         return response()->json([
             'customers' => $customers,
@@ -46,6 +84,8 @@ class CustomerController extends Controller
             'total_pending_amount' => $totalPending,
         ]);
     }
+
+
 
 
     // Get single customer
